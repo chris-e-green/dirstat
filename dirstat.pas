@@ -1,9 +1,9 @@
-program dirstat6;
+program dirstat7;
 { produces directory statistics for specified drive }
 uses dos, {crt,} graph, bgidriv;
 const
   progname = 'Directory Statistics';
-  version  = '2.5';
+  version  = '2.6';
   author   = 'C.E.Green';
   progid   = progname+' version '+version+' by '+author;
   distance = 10;    { distance in pixels from outside of pie }
