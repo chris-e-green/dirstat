@@ -1,4 +1,4 @@
-program dirstat3;
+program dirstat4;
 { produces directory statistics for specified drive }
 uses dos,crt,graph,drivers;
 const
@@ -17,7 +17,7 @@ const
   maxfill   = 11;
 
 type
-  dispmodetype = (text,graf);
+  dispmodetype = (notyetknown,text,graf);
   statmodetype = (notyetspecified,disk,usedspace,subdir);
   sizemodetype = (val,percentage);
   listmodetype = (paused,nonpaused);
@@ -99,13 +99,16 @@ begin
     writeln ('  If a path is specified, /S becomes the default.');
     writeln;
     writeln ('  Mode and mode-specific switches -');
-    writeln ('  /T - display directories in text mode (default)');
+    writeln ('  /T - display directories in text mode');
     writeln ('  in text mode,  /P - pause after each page (default)');
     writeln ('  in text mode,  /N - don''t pause in output');
     writeln ('  /G - display directories as graphic pie chart');
-    writeln ('  in graphics mode,  /B - display file sizes in bytes');
     writeln (
-    '  in graphics mode,  /% - display file sizes as percentages(default)');
+    '  in graphics mode,  /B - display file sizes in bytes (default)');
+    writeln ('  in graphics mode,  /% - display file sizes as percentages');
+    writeln;
+    writeln (
+    '  If  a graphics card is detected, graphics mode will be the default');
     writeln;
     writeln (
     'If no path or drive is specified, the current directory is selected.');
@@ -343,7 +346,8 @@ begin
   if copy(pth,length(pth),1)='\' then pth := copy(pth,1,length(pth)-1);
 end;
 
-procedure setupgraf(var centrex,centrey,radius:integer;var xa,ya:word);
+procedure setupgraf(var centrex,centrey,radius:integer;var xa,ya:word;
+                    var dispmode : dispmodetype);
 var
   driver,
   mode,
@@ -363,26 +367,30 @@ begin
   driver := detect;
   initgraph (driver,mode,'');
   error := graphresult;
-  if error <> grOk then
-    Abort ('ERROR : graphics not available',4);
-  centrex:=getmaxx div 2;
-  centrey:=(getmaxy div 2);
-  GetAspectRatio (xa,ya);
-  radius:=round(centrey*ya/xa-36);
-  SetBkColor(White);
-  SetColor(Blue);
-  SetTextJustify(CenterText,TopText);
-  OutTextXY(centrex,3,progid+' for drive '+chr(drvno-1+ord('A'))+':');
-  SetTextJustify(CenterText,BottomText);
-  case statmode of
-    disk : OutTextXY(centrex,getmaxy-3,
-                     'Directories as proportion of total disk space');
-    usedspace : OutTextXY(centreX,getmaxy-3,
-                          'Directories as proportion of used disk space');
-    subdir : OutTextXY(centreX,getmaxy-3,
-                       'Directories as a proportion of '+pth);
+  if error <> grOk then begin
+    if dispmode = notyetknown then dispmode := text
+    else Abort ('ERROR : graphics not available',4)
+  end else dispmode := graf;
+  if dispmode = graf then begin
+    centrex:=getmaxx div 2;
+    centrey:=(getmaxy div 2);
+    GetAspectRatio (xa,ya);
+    radius:=round(centrey*ya/xa-36);
+    SetBkColor(White);
+    SetColor(Blue);
+    SetTextJustify(CenterText,TopText);
+    OutTextXY(centrex,3,progid+' for drive '+chr(drvno-1+ord('A'))+':');
+    SetTextJustify(CenterText,BottomText);
+    case statmode of
+      disk : OutTextXY(centrex,getmaxy-3,
+                       'Directories as proportion of total disk space');
+      usedspace : OutTextXY(centreX,getmaxy-3,
+                            'Directories as proportion of used disk space');
+      subdir : OutTextXY(centreX,getmaxy-3,
+                         'Directories as a proportion of '+pth);
+    end;
+    SetTextStyle(DefaultFont,HorizDir,1);
   end;
-  SetTextStyle(DefaultFont,HorizDir,1);
 end;
 
 procedure stopgraf;
@@ -397,7 +405,7 @@ end;
 begin
   writeln ('Reading directories ...');
   writeln;
-  dispmode := text;
+  dispmode := notyetknown;
   statmode := notyetspecified;
   sizemode := val;
   listmode := paused;
@@ -473,11 +481,11 @@ begin
            ' was not found or contained no files',6);
   if statmode = disk then calcfree;
   if statmode <> subdir then calcslack;
-  if dispmode=graf then begin
-    setupgraf(centrex,centrey,radius,xa,ya);
+  if dispmode <> text then begin
+    setupgraf(centrex,centrey,radius,xa,ya,dispmode);
     plotgraph (comparitor);
     plotpercent(comparitor);
     stopgraf;
-  end else writedirs (comparitor,listmode);
+  end;
+  if dispmode = text then writedirs (comparitor,listmode);
 end. {program}
-
