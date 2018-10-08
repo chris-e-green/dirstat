@@ -1,6 +1,6 @@
-program dirstat5;
+program dirstat6;
 { produces directory statistics for specified drive }
-uses dos,crt,graph,bgidriv;
+uses dos, {crt,} graph, bgidriv;
 const
   progname = 'Directory Statistics';
   version  = '2.5';
@@ -134,9 +134,9 @@ begin
   if listmode = paused then begin
     linecount := linecount+1;
     if linecount = 23 then begin
-      writeln ('Press a key to continue listing');
-      while not keypressed do;
-      dummy := readkey;
+      writeln ('Press return to continue listing');
+{      while not keypressed do;
+      dummy := readkey;} read (dummy);
       linecount:=0;
     end;
   end;
@@ -397,8 +397,8 @@ procedure stopgraf;
 var
   dummy : char;
 begin
-  while not keypressed do;
-  dummy := readkey;
+{  while not keypressed do;
+  dummy := readkey;} read (dummy);
   closegraph;
 end;
 
