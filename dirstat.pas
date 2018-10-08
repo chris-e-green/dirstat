@@ -1,9 +1,9 @@
-program dirstat2;
+program dirstat3;
 { produces directory statistics for specified drive }
 uses dos,crt,graph,drivers;
 const
   progname = 'Directory Statistics';
-  version  = '2.2';
+  version  = '2.4';
   author   = 'C.E.Green';
   progid   = progname+' version '+version+' by '+author;
   distance = 10;    { distance in pixels from outside of pie }
@@ -12,13 +12,13 @@ const
   pratio3 = 3.0;
   centremin = -10; { range of h & v pixels from centre to center }
   centremax = 10;  { text within }
-  width     = 4;   { formatting options for percentages }
+  width     = 5;   { formatting options for percentages }
   decimals  = 1;
   maxfill   = 11;
 
 type
   dispmodetype = (text,graf);
-  statmodetype = (disk,usedspace,subdir);
+  statmodetype = (notyetspecified,disk,usedspace,subdir);
   sizemodetype = (val,percentage);
   listmodetype = (paused,nonpaused);
   listptr  = ^listrec;
@@ -33,6 +33,7 @@ type
                end;
 var
   list : listptr;
+  current:listptr;
   pposition,
   lposition: boolean; { true=near edge,false=away from edge }
   pth : string;
@@ -64,6 +65,29 @@ begin
   halt (errorlvl);
 end;
 
+procedure insert(dir:string;size:longint;level:integer);
+var
+  temp : listptr;
+begin
+  if current = NIL then begin
+    new(temp);
+    temp^.dir := dir;
+    temp^.size := size;
+    temp^.level := level;
+    temp^.next := NIL;
+    list := temp;
+    current := temp;
+  end else begin
+    new(temp);
+    temp^.dir := dir;
+    temp^.size := size;
+    temp^.level := level;
+    temp^.next := NIL;
+    current^.next := temp;
+    current := temp;
+  end;
+end;
+
 procedure invalidparam;
 begin
     writeln ('USAGE: DIRSTAT [drive_letter][:][path] [switches]');
@@ -80,10 +104,12 @@ begin
     writeln ('  in text mode,  /N - don''t pause in output');
     writeln ('  /G - display directories as graphic pie chart');
     writeln ('  in graphics mode,  /B - display file sizes in bytes');
-    writeln ('  in graphics mode,  /% - display file sizes as percentages(default)');
+    writeln (
+    '  in graphics mode,  /% - display file sizes as percentages(default)');
     writeln;
     writeln (
     'If no path or drive is specified, the current directory is selected.');
+    writeln ('Subdirectories below the starting directory are cumulated.');
     Abort('',1);
 end;
 
@@ -96,6 +122,7 @@ var
   tempstr:string;
   tempstr1:string;
   count : byte;
+{  lastlevel : integer;}
 procedure checkedwrite (lstr:string;var linecount:integer);
 var
   dummy:char;
@@ -113,21 +140,36 @@ begin
 end;
 
 begin
+{  lastlevel := 0;}
   linecount := 0;
   lp := list;
+  checkedwrite(progid+' for drive '+chr(drvno-1+ord('A'))+':',linecount);
+  checkedwrite('',linecount);
+  case statmode of
+    disk : checkedwrite('Directories as proportion of total disk space',
+                        linecount);
+    usedspace : checkedwrite('Directories as proportion of used disk space',
+                             linecount);
+    subdir : checkedwrite('Directories as a proportion of '+pth,
+                          linecount);
+  end;
+  checkedwrite('',linecount);
   while lp <> NIL do begin
-    if lp^.level <= 2 then checkedwrite('',linecount);
     temp := lp^.size;
     str(temp:8,sizestr);
     if temp > 1024 then begin
       temp := temp div 1024;
       str(temp:8,sizestr);
       sizestr := sizestr + 'K';
-    end;
+    end else sizestr := sizestr + ' ';
     str(lp^.size/comparitor*100:width:decimals,tempstr);
     tempstr1:=' ';
     for count := 1 to lp^.level do tempstr1:=' '+tempstr1;
+{    if lp^.level < lastlevel then
+       checkedwrite ('______________________',linecount);}
     checkedwrite (tempstr+'% '+ sizestr+tempstr1+lp^.dir,linecount);
+{    if lp^.level < lastlevel then checkedwrite('',linecount);}
+{    lastlevel := lp^.level;}
     lp := lp^.next;
   end;
 end;
@@ -236,28 +278,17 @@ begin
 end;
 
 procedure calcfree;
-var
-  lp : listptr;
 begin
-  new(lp);
-  lp^.next := list;
-  lp^.dir  := 'Free';
-  lp^.size := free;
-  lp^.level:= 1;
-  list := lp;
+  insert('Free',free,1);
 end;
 
 procedure calcslack;
 var
-  lp : listptr;
+  strlabel : string;
 begin
-  new(lp);
-  lp^.next := list;
-  if pth = '' then lp^.dir  := 'Slack Space'
-  else lp^.dir := 'Slack Space + Other';
-  lp^.size := used-total;
-  lp^.level:= 1;
-  list := lp;
+  if pth = '' then strlabel := 'Slack Space'
+  else strlabel := 'Slack Space + Other';
+  insert (strlabel,used-total,1);
 end;
 
 procedure searchforfiles (spath:string;var total:longint;level:integer);
@@ -269,9 +300,9 @@ var
   ltot : longint;
   drvno : byte;
   proportion : integer;
-  listcur : listptr;
   l1tot : longint;
   percent : string;
+  disppath :string;
 
 begin
   ltot := 0;
@@ -285,15 +316,16 @@ begin
     ltot := ltot + fsize;
     FindNext (f);
   end;
-  new (listcur);
-  listcur^.next := list;
-  listcur^.dir  := spath;
-  if level=1 then begin
-    listcur^.size := l1tot;
-    listcur^.dir := listcur^.dir + '\'
-  end else listcur^.size := ltot;
-  listcur^.level:= level;
-  list := listcur;
+  disppath := spath;
+  if (statmode = subdir) and (level > 1) then
+    delete(disppath,1,length(pth)+3);
+  if (level=1) then begin
+    if statmode <> subdir then
+      insert (disppath+'\',l1tot,level)
+    else
+      insert (disppath,l1tot,level)
+  end
+  else insert (disppath,ltot,level);
   total := total + ltot;
 end;
 
@@ -343,9 +375,12 @@ begin
   OutTextXY(centrex,3,progid+' for drive '+chr(drvno-1+ord('A'))+':');
   SetTextJustify(CenterText,BottomText);
   case statmode of
-    disk : OutTextXY(centrex,getmaxy-3,'Directories as proportion of total disk space');
-    usedspace : OutTextXY(centreX,getmaxy-3,'Directories as proportion of used disk space');
-    subdir : OutTextXY(centreX,getmaxy-3,'Directories as a proportion of '+pth);
+    disk : OutTextXY(centrex,getmaxy-3,
+                     'Directories as proportion of total disk space');
+    usedspace : OutTextXY(centreX,getmaxy-3,
+                          'Directories as proportion of used disk space');
+    subdir : OutTextXY(centreX,getmaxy-3,
+                       'Directories as a proportion of '+pth);
   end;
   SetTextStyle(DefaultFont,HorizDir,1);
 end;
@@ -360,11 +395,11 @@ begin
 end;
 
 begin
-  writeln (progid);
+  writeln ('Reading directories ...');
   writeln;
   dispmode := text;
-  statmode := usedspace;
-  sizemode := percentage;
+  statmode := notyetspecified;
+  sizemode := val;
   listmode := paused;
   drvno := 99;
   pth := '';
@@ -375,15 +410,15 @@ begin
    while chcount <= length(pstr) do begin
      if pstr[chcount] = '/' then begin
        case upcase(pstr[chcount+1]) of
+         'B' : sizemode := val;
          'D' : statmode := disk;
          'G' : dispmode := graf;
-         'U' : statmode := usedspace;
-         'T' : dispmode := text;
-         'S' : statmode := subdir;
-         'B' : sizemode := val;
-         '%' : sizemode := percentage;
-         'P' : listmode := paused;
          'N' : listmode := nonpaused;
+         'P' : listmode := paused;
+         'S' : statmode := subdir;
+         'T' : dispmode := text;
+         'U' : statmode := usedspace;
+         '%' : sizemode := percentage;
        else
          InvalidParam;
        end; {case}
@@ -412,7 +447,13 @@ begin
     pstr := copy (pstr,1,length(pstr)-1);
     parsedir(pstr,drvno,pth);
   end;
-  if pth <> '' then statmode := subdir;
+  if statmode = notyetspecified
+  then begin
+    if pth <> '' then
+      statmode := subdir
+    else
+      statmode := usedspace
+  end;
   dsize := Disksize (drvno);
   if dsize = -1 then
     Abort ('ERROR : not reading a disk in drive '+chr(drvno-1+ord('A')),3);
@@ -428,7 +469,8 @@ begin
     subdir : comparitor := total;
   end;
   if comparitor = 0 then
-    abort ('ERROR : Directory '+chr(drvno-1+ord('A'))+':'+pth+' was not found or contained no files',6);
+    abort ('ERROR : Directory '+chr(drvno-1+ord('A'))+':'+pth+
+           ' was not found or contained no files',6);
   if statmode = disk then calcfree;
   if statmode <> subdir then calcslack;
   if dispmode=graf then begin
