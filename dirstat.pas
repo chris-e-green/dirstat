@@ -1,9 +1,9 @@
-program dirstat4;
+program dirstat5;
 { produces directory statistics for specified drive }
-uses dos,crt,graph,drivers;
+uses dos,crt,graph,bgidriv;
 const
   progname = 'Directory Statistics';
-  version  = '2.4';
+  version  = '2.5';
   author   = 'C.E.Green';
   progid   = progname+' version '+version+' by '+author;
   distance = 10;    { distance in pixels from outside of pie }
@@ -409,10 +409,12 @@ begin
   statmode := notyetspecified;
   sizemode := val;
   listmode := paused;
+  current  := NIL;
+  list     := NIL;
   drvno := 99;
   pth := '';
   list := NIL;
-  for count := 0 to paramcount do begin
+  for count := 1 to paramcount do begin
    pstr := paramstr(count);
    chcount := 1;
    while chcount <= length(pstr) do begin
