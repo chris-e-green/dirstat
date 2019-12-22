@@ -3,7 +3,7 @@ program dirstat7;
 uses dos, {crt,} graph, bgidriv;
 const
   progname = 'Directory Statistics';
-  version  = '2.6';
+  version  = '2.7';
   author   = 'C.E.Green';
   progid   = progname+' version '+version+' by '+author;
   distance = 10;    { distance in pixels from outside of pie }
@@ -21,6 +21,7 @@ type
   statmodetype = (notyetspecified,disk,usedspace,subdir);
   sizemodetype = (val,percentage);
   listmodetype = (paused,nonpaused);
+  dirmodetype  = (first,all);
   listptr  = ^listrec;
   listrec  = record
                   next : listptr;
@@ -43,6 +44,7 @@ var
   statmode : statmodetype;
   dispmode : dispmodetype;
   listmode : listmodetype;
+  dirmode  : dirmodetype;
   radius,
   centrex,centrey:integer;
   stangle : real;
@@ -100,8 +102,9 @@ begin
     writeln;
     writeln ('  Mode and mode-specific switches -');
     writeln ('  /T - display directories in text mode');
-    writeln ('  in text mode,  /P - pause after each page (default)');
-    writeln ('  in text mode,  /N - don''t pause in output');
+    writeln ('  in text mode,  /P - pause after each page');
+    writeln ('  in text mode,  /N - don''t pause in output (default)');
+    writeln ('  in text mode,  /1 - just display first level directory info');
     writeln ('  /G - display directories as graphic pie chart');
     writeln (
     '  in graphics mode,  /B - display file sizes in bytes (default)');
@@ -168,11 +171,8 @@ begin
     str(lp^.size/comparitor*100:width:decimals,tempstr);
     tempstr1:=' ';
     for count := 1 to lp^.level do tempstr1:=' '+tempstr1;
-{    if lp^.level < lastlevel then
-       checkedwrite ('______________________',linecount);}
-    checkedwrite (tempstr+'% '+ sizestr+tempstr1+lp^.dir,linecount);
-{    if lp^.level < lastlevel then checkedwrite('',linecount);}
-{    lastlevel := lp^.level;}
+    if (dirmode=all) or (lp^.level<=2) then
+		checkedwrite (tempstr+'% '+ sizestr+tempstr1+lp^.dir,linecount);
     lp := lp^.next;
   end;
 end;
@@ -408,9 +408,10 @@ begin
   dispmode := notyetknown;
   statmode := notyetspecified;
   sizemode := val;
-  listmode := paused;
+  listmode := nonpaused;
   current  := NIL;
   list     := NIL;
+  dirmode  := all;
   drvno := 99;
   pth := '';
   list := NIL;
@@ -420,6 +421,7 @@ begin
    while chcount <= length(pstr) do begin
      if pstr[chcount] = '/' then begin
        case upcase(pstr[chcount+1]) of
+			'1' : dirmode  := first;
          'B' : sizemode := val;
          'D' : statmode := disk;
          'G' : dispmode := graf;
